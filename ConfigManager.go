@@ -1,12 +1,20 @@
 package ConfigManager
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 )
+
+// Returned by Set when an option's value fails to parse
+var ErrParse = errors.New("parse error")
+
+// Returned by Set when an option's value is outside the defined range
+var ErrRange = errors.New("value out of range")
 
 // What will the manager do when an error happens during configuration parsing
 type ErrorHandling int
@@ -148,6 +156,65 @@ func (c *ConfigSet) IsZeroValue(name string) (bool, error) {
 	return opt.isZeroValue()
 }
 
+// Defines an option with the specified name and default value.
+// The type is defined by the first argument, which is a Value interface
+// It's methods determine how the value is interacted with
+func (c *ConfigSet) Var(value Value, name string) {
+	opt := &Option{name, value.String(), value}
+
+	_, exists := c.formal[name]
+	if exists {
+		panic(fmt.Sprintf("%s option redefined", name))
+	}
+
+	if c.formal == nil {
+		c.formal = make(map[string]*Option)
+	}
+
+	c.formal[name] = opt
+}
+
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Default Values
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+// =-=-= boolValue
+
+type boolValue bool
+
+func newBoolValue(val bool, p *bool) *boolValue {
+	*p = val
+	return (*boolValue)(p)
+}
+
+func (b *boolValue) Set(s string) error {
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		err = ErrParse
+	}
+	*b = boolValue(v)
+	return err
+}
+
+func (b *boolValue) Get() any { return bool(*b) }
+
+func (b *boolValue) String() string { return strconv.FormatBool(bool(*b)) }
+
+// =-=-= stringValue
+type stringValue string
+
+func newStringValue(val string, p *string) *stringValue {
+	*p = val
+	return (*stringValue)(p)
+}
+
+func (s *stringValue) Set(str string) error {
+	*s = (stringValue)(str)
+	return nil
+}
+
+func (s *stringValue) String() string { return (string)(*s) }
+
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Option Binds
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -155,9 +222,5 @@ func (c *ConfigSet) IsZeroValue(name string) (bool, error) {
 func Bool(key string, defaultValue bool) *bool
 
 func String(key string, defaultValue string) *string
-
-func StringLimit(key string, defaultValue string, valid []string) *string
-
-func StringCustom(key string, defaultValue string, validator func(string) bool) *string
 
 func Parse()
