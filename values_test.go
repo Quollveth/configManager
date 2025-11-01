@@ -64,10 +64,10 @@ func valueTester[T any](v Value, valid []string, invalid []string, base *T, equa
 
 // Example test
 func Test_boolVal(t *testing.T) {
-	var b bool = true
+	var b bool
 	v := newBoolValue(b, &b)
 
-	err := valueTester(
+	if err := valueTester(
 		v,
 		[]string{
 			"true",
@@ -82,9 +82,30 @@ func Test_boolVal(t *testing.T) {
 		},
 		&b,
 		func(s string, b bool) bool { return strconv.FormatBool(b) == s },
-	)
-
-	if err != nil {
+	); err != nil {
 		t.Fatal(err)
 	}
 }
+
+func Test_stringVal(t *testing.T) {
+	var s string
+	v := newStringValue(s, &s)
+
+	if err := valueTester(
+		v,
+		[]string{
+			"true",
+			"TRue",
+			"67",
+			"",
+			"𐐘",
+		},
+
+		[]string{}, // any string is a valid string value
+		&s,
+		func(a string, b string) bool { return a == b },
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
