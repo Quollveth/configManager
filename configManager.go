@@ -1,9 +1,10 @@
-package ConfigManager
+package configManager
 
 import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -15,16 +16,6 @@ var ErrParse = errors.New("parse error")
 
 // Returned by Set when an option's value is outside the defined range
 var ErrRange = errors.New("value out of range")
-
-// What will the manager do when an error happens during configuration parsing
-type ErrorHandling int
-
-const (
-	DefaultOnError ErrorHandling = iota // Sets the option to it's default value and continue
-	StopOnError                         // Stops parsing and returns an error
-	ExitOnError                         // Calls os.Exit(2) and prints error to stderr
-	PanicOnError                        // Calls panic() with the error
-)
 
 // Used to dynamically store the value of an option
 // Since all options are read from a file the default value is a string
@@ -42,7 +33,7 @@ type Option struct {
 }
 
 // Check wether this option is set to it's zero value
-func (o *Option) isZeroValue() (ok bool, err error) {
+func (o *Option) IsZeroValue() (ok bool, err error) {
 	// Build a zero value of the flag's Value type, and see if the
 	// result of calling its String method equals the value passed in.
 	// This works unless the Value type is itself an interface type.
@@ -69,8 +60,7 @@ func (o *Option) isZeroValue() (ok bool, err error) {
 }
 
 type ConfigSet struct {
-	OnError       func()
-	ErrorHandling ErrorHandling
+	onError func(error)
 
 	formal map[string]*Option // All options
 	actual map[string]*Option // Set options
@@ -98,6 +88,20 @@ func (c *ConfigSet) sortOptions(opts map[string]*Option) []*Option {
 // If nil stderr is used
 func (c *ConfigSet) SetOutput(output io.Writer) {
 	c.output = output
+}
+
+// Sets handler for errors
+// If no handler is set the default behavior is to print to stderr
+func (c *ConfigSet) SetErrorHandler(handler func(error)) {
+	c.onError = handler
+}
+
+func (c *ConfigSet) error(err error) {
+	if c.onError != nil {
+		c.onError(err)
+		return
+	}
+	os.Stderr.WriteString(err.Error())
 }
 
 // Gets configuration file location
@@ -153,7 +157,7 @@ func (c *ConfigSet) IsZeroValue(name string) (bool, error) {
 		return false, fmt.Errorf("No such option %v", name)
 	}
 
-	return opt.isZeroValue()
+	return opt.IsZeroValue()
 }
 
 // Defines an option with the specified name and default value.
@@ -179,7 +183,6 @@ func (c *ConfigSet) Var(value Value, name string) {
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 // =-=-= boolValue
-
 type boolValue bool
 
 func newBoolValue(val bool, p *bool) *boolValue {
@@ -213,14 +216,30 @@ func (s *stringValue) Set(str string) error {
 	return nil
 }
 
-func (s *stringValue) String() string { return (string)(*s) }
+func (s *stringValue) Get() any { return string(*s) }
+
+func (s *stringValue) String() string { return string(*s) }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Option Binds
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-func Bool(key string, defaultValue bool) *bool
+func (c *ConfigSet) BoolVar(p *bool, key string, defaultValue bool) {
+	c.Var(newBoolValue(defaultValue, p), key)
+}
 
-func String(key string, defaultValue string) *string
+func (c *ConfigSet) Bool(key string, defaultValue bool) *bool {
+	p := new(bool)
+	c.BoolVar(p, key, defaultValue)
+	return p
+}
 
-func Parse()
+func (c *ConfigSet) StringVar(p *string, key string, defaultValue string) {
+	c.Var(newStringValue(defaultValue, p), key)
+}
+
+func (c *ConfigSet) String(key string, defaultValue string) *string {
+	p := new(string)
+	c.StringVar(p, key, defaultValue)
+	return p
+}
