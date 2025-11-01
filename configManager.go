@@ -96,6 +96,8 @@ func (c *ConfigSet) SetErrorHandler(handler func(error)) {
 	c.onError = handler
 }
 
+// Called by Parse when an error happens
+// Uses the function set by SetErrorHandler
 func (c *ConfigSet) error(err error) {
 	if c.onError != nil {
 		c.onError(err)
