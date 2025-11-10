@@ -1,6 +1,8 @@
 package configManager
 
 import (
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +18,9 @@ var ErrParse = errors.New("parse error")
 
 // Returned by Set when an option's value is outside the defined range
 var ErrRange = errors.New("value out of range")
+
+// Returned by Parse when format is set to CUSTOM and no unmarshaller is provided
+var ErrNoParser = errors.New("no parser provided for custom format")
 
 // Used to dynamically store the value of an option
 // Since all options are read from a file the default value is a string
@@ -59,14 +64,33 @@ func (o *Option) IsZeroValue() (ok bool, err error) {
 	return o.Value.String() == z.Interface().(Value).String(), nil
 }
 
-type ConfigSet struct {
-	onError func(error)
+type fileFormat int
 
+const (
+	JSON fileFormat = iota
+	XML
+	CUSTOM
+)
+
+type ConfigSet struct {
 	formal map[string]*Option // All options
 	actual map[string]*Option // Set options
 
-	location string    // configuration file location
-	output   io.Writer // output of error messages, if nill stderr is used
+	// Handler for errors
+	// If left as nil errors are written to Output (stderr by default)
+	OnError func(error)
+	// Output of error messages, if nill stderr is used
+	Output io.Writer
+
+	// Location of configuration file
+	Location string
+	// Format of configuration file, must be set to constants JSON, XML or CUSTOM
+	Format fileFormat
+
+	// Unmarshaller to be used for CUSTOM fileFormat
+	// If Format is set to CUSTOM and no unmarshaller is provided a call to Parse will return ErrNoParser
+	// If Format is not set to CUSTOM this can remain unset or nil
+	Unmarshaller func(data []byte, v any) error
 }
 
 // Returns a lexicographically sorted slice of all options
@@ -82,38 +106,6 @@ func (c *ConfigSet) sortOptions(opts map[string]*Option) []*Option {
 	})
 
 	return result
-}
-
-// Sets the destination for error messages.
-// If nil stderr is used
-func (c *ConfigSet) SetOutput(output io.Writer) {
-	c.output = output
-}
-
-// Sets handler for errors
-// If no handler is set the default behavior is to print to stderr
-func (c *ConfigSet) SetErrorHandler(handler func(error)) {
-	c.onError = handler
-}
-
-// Called by Parse when an error happens
-// Uses the function set by SetErrorHandler
-func (c *ConfigSet) error(err error) {
-	if c.onError != nil {
-		c.onError(err)
-		return
-	}
-	os.Stderr.WriteString(err.Error())
-}
-
-// Gets configuration file location
-func (c *ConfigSet) Location() string {
-	return c.location
-}
-
-// Lookups [Option] struct of the named option
-func (c *ConfigSet) Lookup(name string) *Option {
-	return c.formal[name]
 }
 
 // Visits all options in lexicographical order, calling fn for each
@@ -152,6 +144,9 @@ func (c *ConfigSet) Set(name, value string) error {
 	return nil
 }
 
+// Lookups [Option] struct of the named option
+func (c *ConfigSet) Lookup(name string) *Option { return c.formal[name] }
+
 // Checks wether named option is set to it's zero value
 func (c *ConfigSet) IsZeroValue(name string) (bool, error) {
 	opt, ok := c.actual[name]
@@ -160,6 +155,20 @@ func (c *ConfigSet) IsZeroValue(name string) (bool, error) {
 	}
 
 	return opt.IsZeroValue()
+}
+
+// Called by Parse when an error happens
+func (c *ConfigSet) error(err error) {
+	if c.OnError != nil {
+		c.OnError(err)
+		return
+	}
+	if c.Output != nil {
+		c.Output.Write([]byte(err.Error()))
+		return
+	}
+
+	os.Stderr.WriteString(err.Error())
 }
 
 // Defines an option with the specified name and default value.
@@ -178,6 +187,42 @@ func (c *ConfigSet) Var(value Value, name string) {
 	}
 
 	c.formal[name] = opt
+}
+
+func (c *ConfigSet) ParseFromData(b []byte) {
+	switch c.Format {
+	case JSON: c.Unmarshaller = json.Unmarshal
+	case XML: c.Unmarshaller = xml.Unmarshal
+	case CUSTOM:
+		if c.Unmarshaller == nil {
+			c.OnError(ErrNoParser)
+			return
+		}
+	}
+
+	var data = make(map[string]string)
+
+	err := c.Unmarshaller(b, &data)
+	if err != nil {
+		c.OnError(err)
+	}
+
+	c.VisitAll(func(o *Option) {
+		if v, ok := data[o.Name]; ok {
+			o.Value.Set(v)
+		}
+	})
+}
+
+// Parse the configuration file and sets all options
+func (c *ConfigSet) Parse() {
+	fdat, err := os.ReadFile(c.Location)
+	if err != nil {
+		c.OnError(err)
+		return
+	}
+
+	c.ParseFromData(fdat)
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
