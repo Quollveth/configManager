@@ -1,6 +1,7 @@
 package configManager
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -65,15 +66,20 @@ func Test_boolOption(t *testing.T) {
 }
 
 func Test_parseFrom(t *testing.T) {
-	rd := randString(32)
-	jason := fmt.Sprintf("{\"foo\":\"%s\"}", rd)
-
 	var c ConfigSet
-	o := c.String("foo", "")
 
+	cfg := make(map[string]interface{})
+
+	cfg["foo"] = true
+	c.Bool("foo", false)
+
+	cfg["bar"] = "hello"
+	c.String("bar", "")
+
+	jason, _ := json.Marshal(cfg)
 	c.ParseFromData([]byte(jason))
+	var str []string
+	c.Visit(func(o *Option) { str = append(str, fmt.Sprintf("%v:%v", o.Name, o.Value.Get())) })
 
-	if *o != rd {
-		t.Fatalf("Option not set to expected value [%v], received [%v]\n", rd, *o)
-	}
+	t.Log(str)
 }

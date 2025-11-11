@@ -200,16 +200,27 @@ func (c *ConfigSet) ParseFromData(b []byte) {
 		}
 	}
 
-	var data = make(map[string]string)
+	var data = make(map[string]interface{})
 
 	err := c.Unmarshaller(b, &data)
 	if err != nil {
-		c.OnError(err)
+		c.error(err)
 	}
 
 	c.VisitAll(func(o *Option) {
+		if _, present := c.actual[o.Name]; present {
+			// do not set repeat options
+			return
+		}
+
 		if v, ok := data[o.Name]; ok {
-			o.Value.Set(v)
+			vs := fmt.Sprint(v)
+			o.Value.Set(vs)
+
+			if c.actual == nil {
+				c.actual = make(map[string]*Option)
+			}
+			c.actual[o.Name] = o
 		}
 	})
 }
