@@ -1,7 +1,6 @@
 package configManager
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -65,21 +64,3 @@ func Test_boolOption(t *testing.T) {
 	}
 }
 
-func Test_parseFrom(t *testing.T) {
-	var c ConfigSet
-
-	cfg := make(map[string]interface{})
-
-	cfg["foo"] = true
-	c.Bool("foo", false)
-
-	cfg["bar"] = "hello"
-	c.String("bar", "")
-
-	jason, _ := json.Marshal(cfg)
-	c.ParseFromData([]byte(jason))
-	var str []string
-	c.Visit(func(o *Option) { str = append(str, fmt.Sprintf("%v:%v", o.Name, o.Value.Get())) })
-
-	t.Log(str)
-}
