@@ -191,8 +191,10 @@ func (c *ConfigSet) Var(value Value, name string) {
 
 func (c *ConfigSet) ParseFromData(b []byte) {
 	switch c.Format {
-	case JSON: c.Unmarshaller = json.Unmarshal
-	case XML: c.Unmarshaller = xml.Unmarshal
+	case JSON:
+		c.Unmarshaller = json.Unmarshal
+	case XML:
+		c.Unmarshaller = xml.Unmarshal
 	case CUSTOM:
 		if c.Unmarshaller == nil {
 			c.OnError(ErrNoParser)
@@ -243,10 +245,7 @@ func (c *ConfigSet) Parse() {
 // =-=-= boolValue
 type boolValue bool
 
-func newBoolValue(val bool, p *bool) *boolValue {
-	*p = val
-	return (*boolValue)(p)
-}
+func newBoolValue(p *bool) *boolValue { return (*boolValue)(p) }
 
 func (b *boolValue) Set(s string) error {
 	v, err := strconv.ParseBool(s)
@@ -264,10 +263,7 @@ func (b *boolValue) String() string { return strconv.FormatBool(bool(*b)) }
 // =-=-= stringValue
 type stringValue string
 
-func newStringValue(val string, p *string) *stringValue {
-	*p = val
-	return (*stringValue)(p)
-}
+func newStringValue(p *string) *stringValue { return (*stringValue)(p) }
 
 func (s *stringValue) Set(str string) error {
 	*s = (stringValue)(str)
@@ -278,12 +274,96 @@ func (s *stringValue) Get() any { return string(*s) }
 
 func (s *stringValue) String() string { return string(*s) }
 
+// =-=-= float64Value
+type float64Value float64
+
+func newFloat64Value(p *float64) *float64Value { return (*float64Value)(p) }
+
+func (f *float64Value) Set(s string) error {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		err = ErrParse
+	}
+	*f = float64Value(v)
+	return err
+}
+
+func (f *float64Value) Get() any { return float64(*f) }
+
+func (f *float64Value) String() string { return strconv.FormatFloat(float64(*f), 'g', -1, 64) }
+
+// =-=-= intValue
+type intValue int
+
+func newIntValue(p *int) *intValue { return (*intValue)(p) }
+
+func (i *intValue) Set(s string) error {
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		err = ErrParse
+	}
+	*i = intValue(v)
+	return err
+}
+
+func (i *intValue) Get() any { return int(*i) }
+
+func (i *intValue) String() string { return strconv.Itoa(int(*i)) }
+
+// =-=-= int64Value
+type int64Value int64
+
+func newInt64Value(p *int64) *int64Value { return (*int64Value)(p) }
+
+func (i *int64Value) Set(s string) error {
+	v, err := strconv.ParseInt(s, 0, 64)
+	if err != nil {
+		err = ErrParse
+	}
+	*i = int64Value(v)
+	return err
+}
+
+func (i *int64Value) Get() any { return int64(*i) }
+
+func (i *int64Value) String() string { return strconv.FormatInt(int64(*i), 10) }
+
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Generics
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+type ValueFactory func(p any) Value
+
+var valueFactories = map[reflect.Kind]ValueFactory{
+	reflect.Bool: func(p any) Value { return newBoolValue(p.(*bool)) },
+}
+
+func RegisterType[T Value](exampleValue T, factory ValueFactory) {
+	t := reflect.TypeOf(exampleValue).Kind()
+	valueFactories[t] = factory
+}
+
+func AddOptionToSetVar[T any](c ConfigSet, p *T, key string, defaultValue T) {
+	t := reflect.TypeOf(defaultValue).Kind()
+	factory := valueFactories[t]
+	c.Var(factory(p), key)
+}
+
+func AddOptionToSet[T any](c ConfigSet, key string, defaultValue T) *T {
+	p := new(T)
+	AddOptionToSetVar(c, p, key, defaultValue)
+	return p
+}
+
+/*
+still here if generics break again i dont have to rewrite it
+
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Option Binds
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 func (c *ConfigSet) BoolVar(p *bool, key string, defaultValue bool) {
-	c.Var(newBoolValue(defaultValue, p), key)
+	c.Var(newBoolValue(p), key)
 }
 
 func (c *ConfigSet) Bool(key string, defaultValue bool) *bool {
@@ -293,7 +373,7 @@ func (c *ConfigSet) Bool(key string, defaultValue bool) *bool {
 }
 
 func (c *ConfigSet) StringVar(p *string, key string, defaultValue string) {
-	c.Var(newStringValue(defaultValue, p), key)
+	c.Var(newStringValue(p), key)
 }
 
 func (c *ConfigSet) String(key string, defaultValue string) *string {
@@ -301,3 +381,25 @@ func (c *ConfigSet) String(key string, defaultValue string) *string {
 	c.StringVar(p, key, defaultValue)
 	return p
 }
+
+func (c *ConfigSet) IntVar(p *int, key string, defaultValue int) {
+	c.Var(newIntValue(p), key)
+}
+
+func (c *ConfigSet) Int(key string, defaultValue int) *int {
+	p := new(int)
+	c.IntVar(p, key, defaultValue)
+	return p
+}
+
+func (c *ConfigSet) FloatVar(p *float64, key string, defaultValue float64) {
+	c.Var(newFloat64Value(p), key)
+}
+
+func (c *ConfigSet) Float(key string, defaultValue float64) *float64 {
+	p := new(float64)
+	c.FloatVar(p, key, defaultValue)
+	return p
+}
+
+*/
