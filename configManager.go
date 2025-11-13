@@ -189,7 +189,8 @@ func (c *ConfigSet) Var(value Value, name string) {
 	c.formal[name] = opt
 }
 
-func (c *ConfigSet) ParseFromData(b []byte) {
+// Parse the configuration from the given data and sets all options
+func (c *ConfigSet) ParseFromData(data []byte) {
 	switch c.Format {
 	case JSON:
 		c.Unmarshaller = json.Unmarshal
@@ -202,9 +203,9 @@ func (c *ConfigSet) ParseFromData(b []byte) {
 		}
 	}
 
-	var data = make(map[string]interface{})
+	var d = make(map[string]interface{})
 
-	err := c.Unmarshaller(b, &data)
+	err := c.Unmarshaller(data, &d)
 	if err != nil {
 		c.error(err)
 	}
@@ -215,7 +216,7 @@ func (c *ConfigSet) ParseFromData(b []byte) {
 			return
 		}
 
-		if v, ok := data[o.Name]; ok {
+		if v, ok := d[o.Name]; ok {
 			vs := fmt.Sprint(v)
 			o.Value.Set(vs)
 
@@ -239,7 +240,127 @@ func (c *ConfigSet) Parse() {
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// Default Values
+// Generics
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+type valueFactory func(p any) Value
+
+var valueFactories = map[reflect.Type]valueFactory{
+	reflect.TypeOf((*bool)(nil)):    func(p any) Value { return newBoolValue(p.(*bool)) },
+	reflect.TypeOf((*string)(nil)):  func(p any) Value { return newStringValue(p.(*string)) },
+	reflect.TypeOf((*int)(nil)):     func(p any) Value { return newIntValue(p.(*int)) },
+	reflect.TypeOf((*int64)(nil)):   func(p any) Value { return newInt64Value(p.(*int64)) },
+	reflect.TypeOf((*float64)(nil)): func(p any) Value { return newFloat64Value(p.(*float64)) },
+	reflect.TypeOf((*float32)(nil)): func(p any) Value { return newFloat32Value(p.(*float32)) },
+}
+
+/* Register a new type of option in the configuration
+
+This is a monadic interface and expects a factory function that wraps a type implementing Value interface
+The factory function must receive the type as a pointer
+
+Usage example:
+This example assumes myType is implementing Value interface
+
+type myType struct {...}
+
+RegisterType(func(t *myType) Value {return (myType{})})
+*/
+func RegisterType[T any](factory func(*T) Value) {
+	var ptr *T
+	t := reflect.TypeOf(ptr)
+
+	valueFactories[t] = func(p any) Value {
+		return factory(p.(*T))
+	}
+}
+
+// whoever made methods not allowed to be generic: yo moms a hoe
+
+// Add a new option to the configuration set c
+// key is the name it has on the file and defaultValue is used when the option is not present
+// p is the pointer the value will be set to after parsing the configuration
+func AddOptionToSetVar[T any](c ConfigSet, p *T, key string, defaultValue T) {
+    *p = defaultValue
+    t := reflect.TypeOf(p)
+
+    factory, ok := valueFactories[t]
+	//TODO: theres probable something better to do instead of panic but im too lazy to do it now
+    if !ok {
+        panic(fmt.Sprintf("no ValueFactory registered for type %v", t))
+    }
+    c.Var(factory(p), key)
+}
+
+// Add a new option to the configuration set c
+// key is the name it has on the file and defaultValue is used when the option is not present
+func AddOptionToSet[T any](c ConfigSet, key string, defaultValue T) *T {
+	p := new(T)
+	AddOptionToSetVar(c, p, key, defaultValue)
+	return p
+}
+
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Global Binds
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+var globalConfig ConfigSet
+
+// Add a new configuration option
+// key is the name it has on the file and defaultValue is used when the option is not present
+// p is the pointer the value will be set to after parsing the configuration
+func AddOptionVar[T any](p *T, key string, defaultValue T) {
+	AddOptionToSetVar(globalConfig, p, key, defaultValue)
+}
+
+// Add a new configuration option
+// key is the name it has on the file and defaultValue is used when the option is not present
+func AddOption[T any](key string, defaultValue T) *T { return AddOptionToSet(globalConfig, key, defaultValue) }
+
+// Parse the configuration from the given data and sets all options
+func ParseFromData(data []byte) { globalConfig.ParseFromData(data) }
+
+// Parse the configuration file and sets all options
+func Parse() { globalConfig.Parse() }
+
+// Sets the location for the configuration file
+func SetFileLocation(filename string) { globalConfig.Location = filename }
+
+// Sets the format of the configuration file
+// Expects constants JSON, XML or CUSTOM
+// If set to CUSTOM a unmarshaller must be provided via SetFileUnmarshaller
+func SetFileFormat(format fileFormat) { globalConfig.Format = format }
+
+// Sets the unmarshaller to be used by a custom file format
+// Function must abide by interface used by json.Unmarshal and xml.Unmarshal
+func SetFileUnmarshaller(unmarshaller func(data []byte, v any) error) { globalConfig.Unmarshaller = unmarshaller }
+
+// Sets output of error messages, by default stderr is used
+// This behavior is only used if SetOnError was not given custom behavior
+func SetErrorOutput(output io.Writer) { globalConfig.Output = output }
+
+// Sets a function to be called when an error happens during parsing
+// By default the behavior is to write error to Output which is stderr by default or set by SetErrorOutput
+func SetOnError(onError func(error)) { globalConfig.OnError = onError }
+
+// Visits all options in lexicographical order, calling fn for each
+// Visits unset options
+func VisitAll(fn func(*Option)) { globalConfig.VisitAll(fn) }
+
+// Visits all options in lexicographical order, calling fn for each
+// Visits only set options
+func Visit(fn func(*Option)) { globalConfig.Visit(fn) }
+
+// Sets the value of the named option
+func Set(name, value string) error { return globalConfig.Set(name, value) }
+
+// Lookups [Option] struct of the named option
+func Lookup(name string) *Option { return globalConfig.Lookup(name) }
+
+// Checks wether named option is set to it's zero value
+func IsZeroValue(name string) (bool, error) { return globalConfig.IsZeroValue(name) }
+
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Basic Values
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 // =-=-= boolValue
@@ -292,6 +413,24 @@ func (f *float64Value) Get() any { return float64(*f) }
 
 func (f *float64Value) String() string { return strconv.FormatFloat(float64(*f), 'g', -1, 64) }
 
+// =-=-= float32Value
+type float32Value float32
+
+func newFloat32Value(p *float32) *float32Value { return (*float32Value)(p) }
+
+func (f *float32Value) Set(s string) error {
+	v, err := strconv.ParseFloat(s, 32)
+	if err != nil {
+		err = ErrParse
+	}
+	*f = float32Value(v)
+	return err
+}
+
+func (f *float32Value) Get() any { return float64(*f) }
+
+func (f *float32Value) String() string { return strconv.FormatFloat(float64(*f), 'g', -1, 32) }
+
 // =-=-= intValue
 type intValue int
 
@@ -327,33 +466,6 @@ func (i *int64Value) Set(s string) error {
 func (i *int64Value) Get() any { return int64(*i) }
 
 func (i *int64Value) String() string { return strconv.FormatInt(int64(*i), 10) }
-
-// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// Generics
-// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
-type ValueFactory func(p any) Value
-
-var valueFactories = map[reflect.Kind]ValueFactory{
-	reflect.Bool: func(p any) Value { return newBoolValue(p.(*bool)) },
-}
-
-func RegisterType[T Value](exampleValue T, factory ValueFactory) {
-	t := reflect.TypeOf(exampleValue).Kind()
-	valueFactories[t] = factory
-}
-
-func AddOptionToSetVar[T any](c ConfigSet, p *T, key string, defaultValue T) {
-	t := reflect.TypeOf(defaultValue).Kind()
-	factory := valueFactories[t]
-	c.Var(factory(p), key)
-}
-
-func AddOptionToSet[T any](c ConfigSet, key string, defaultValue T) *T {
-	p := new(T)
-	AddOptionToSetVar(c, p, key, defaultValue)
-	return p
-}
 
 /*
 still here if generics break again i dont have to rewrite it

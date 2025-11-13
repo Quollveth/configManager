@@ -19,7 +19,7 @@ func test() {
 	c := ConfigSet{}
 
 	stringOption := AddOptionToSet(
-		c,             // config set
+		c,             // config set because methods cannot be generic for reasons
 		"greeting",    // key name in file
 		"hello world", // default value for option
 	)
@@ -29,11 +29,11 @@ func test() {
 	floatOption := AddOptionToSet(c, "maximum", 0.0)
 	// in this one floatOption is of type *float64 which got inferred from 0.0
 
-	RegisterType(myStrut{}, func(p any) Value { return newMyStrutValue(p.(*myStrut)) })
+	// register new type in map and give it a factory function
+	RegisterType(func(t *myStrut) Value {return (myStrut{})})
 
 	strutOption := AddOptionToSet(c, "my option", myStrut{})
 	// in this one strutOption is inferred to *myStrut
-
 
 	unused(floatOption)
 	unused(stringOption)
