@@ -15,7 +15,7 @@ func newMyStrutValue(p *myStrut) Value {
 	return (*myStrut)(p)
 }
 
-func test() {
+func example() {
 	c := ConfigSet{}
 
 	stringOption := AddOptionToSet(

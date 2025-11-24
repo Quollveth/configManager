@@ -71,13 +71,21 @@ func randString(l int) string {
 	return string(b)
 }
 
-func optionPanicTester(c *ConfigSet, opt string) error {
-	if p, _ := didPanic(func() { c.Lookup(opt) }); p {
-		return fmt.Errorf("Panicked during lookup operation")
+func optionTester[T any](c *ConfigSet, key string, val T) error {
+	if p, i := didPanic(func() { AddOptionToSet(*c, key, val) }); p {
+		return fmt.Errorf("Panicked during add operation: %v", i)
 	}
-	if p, _ := didPanic(func() { c.Set(opt, "") }); p {
-		return fmt.Errorf("Panicked during set operation")
+
+	if c.Lookup(key) == nil {
+		return fmt.Errorf("Option added as nil")
+	}
+
+	if p, i := didPanic(func() { c.Lookup(key) }); p {
+		return fmt.Errorf("Panicked during lookup operation: %v", i)
+	}
+
+	if p, i := didPanic(func() { c.Set(key, "") }); p {
+		return fmt.Errorf("Panicked during set operation: %v", i)
 	}
 	return nil
 }
-
