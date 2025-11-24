@@ -72,7 +72,7 @@ func randString(l int) string {
 }
 
 func optionTester[T any](c *ConfigSet, key string, val T) error {
-	if p, i := didPanic(func() { AddOptionToSet(*c, key, val) }); p {
+	if p, i := didPanic(func() { AddOptionToSet(c, key, val) }); p {
 		return fmt.Errorf("Panicked during add operation: %v", i)
 	}
 

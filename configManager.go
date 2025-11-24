@@ -257,14 +257,17 @@ var valueFactories = map[reflect.Type]valueFactory{
 /* Register a new type of option in the configuration
 
 This is a monadic interface and expects a factory function that wraps a type implementing Value interface
-The factory function must receive the type as a pointer
+The factory function must receive the type as a pointer and return it wrapped in a Value interface
 
-Usage example:
-This example assumes myType is implementing Value interface
-
+Usage examples:
+if myType is implementing Value interface
 type myType struct {...}
 
-RegisterType(func(t *myType) Value {return (myType{})})
+RegisterType(func(t *myType) Value {return (myType)(t)})
+
+if myType is an alias to a basic type
+type myType int64
+RegisterType(func(t *myType) Value {return newInt64Value(int64(*t))})
 */
 func RegisterType[T any](factory func(*T) Value) {
 	var ptr *T
@@ -280,7 +283,7 @@ func RegisterType[T any](factory func(*T) Value) {
 // Add a new option to the configuration set c
 // key is the name it has on the file and defaultValue is used when the option is not present
 // p is the pointer the value will be set to after parsing the configuration
-func AddOptionToSetVar[T any](c ConfigSet, p *T, key string, defaultValue T) {
+func AddOptionToSetVar[T any](c *ConfigSet, p *T, key string, defaultValue T) {
     *p = defaultValue
     t := reflect.TypeOf(p)
 
@@ -294,7 +297,7 @@ func AddOptionToSetVar[T any](c ConfigSet, p *T, key string, defaultValue T) {
 
 // Add a new option to the configuration set c
 // key is the name it has on the file and defaultValue is used when the option is not present
-func AddOptionToSet[T any](c ConfigSet, key string, defaultValue T) *T {
+func AddOptionToSet[T any](c *ConfigSet, key string, defaultValue T) *T {
 	p := new(T)
 	AddOptionToSetVar(c, p, key, defaultValue)
 	return p
@@ -309,12 +312,12 @@ var globalConfig ConfigSet
 // key is the name it has on the file and defaultValue is used when the option is not present
 // p is the pointer the value will be set to after parsing the configuration
 func AddOptionVar[T any](p *T, key string, defaultValue T) {
-	AddOptionToSetVar(globalConfig, p, key, defaultValue)
+	AddOptionToSetVar(&globalConfig, p, key, defaultValue)
 }
 
 // Add a new configuration option
 // key is the name it has on the file and defaultValue is used when the option is not present
-func AddOption[T any](key string, defaultValue T) *T { return AddOptionToSet(globalConfig, key, defaultValue) }
+func AddOption[T any](key string, defaultValue T) *T { return AddOptionToSet(&globalConfig, key, defaultValue) }
 
 // Parse the configuration from the given data and sets all options
 func ParseFromData(data []byte) { globalConfig.ParseFromData(data) }

@@ -19,20 +19,20 @@ func example() {
 	c := ConfigSet{}
 
 	stringOption := AddOptionToSet(
-		c,             // config set because methods cannot be generic for reasons
+		&c,             // config set because methods cannot be generic for reasons
 		"greeting",    // key name in file
 		"hello world", // default value for option
 	)
 	// since default value (third parameter) is the generic, return value gets inferred to *string
 	// so stringOption is of type *string
 
-	floatOption := AddOptionToSet(c, "maximum", 0.0)
+	floatOption := AddOptionToSet(&c, "maximum", 0.0)
 	// in this one floatOption is of type *float64 which got inferred from 0.0
 
 	// register new type in map and give it a factory function
 	RegisterType(func(t *myStrut) Value {return (myStrut{})})
 
-	strutOption := AddOptionToSet(c, "my option", myStrut{})
+	strutOption := AddOptionToSet(&c, "my option", myStrut{})
 	// in this one strutOption is inferred to *myStrut
 
 	unused(floatOption)
