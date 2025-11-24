@@ -239,6 +239,8 @@ func (c *ConfigSet) Parse() {
 	c.ParseFromData(fdat)
 }
 
+type myType int
+
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Generics
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -249,6 +251,7 @@ var valueFactories = map[reflect.Type]valueFactory{
 	reflect.TypeOf((*bool)(nil)):    func(p any) Value { return newBoolValue(p.(*bool)) },
 	reflect.TypeOf((*string)(nil)):  func(p any) Value { return newStringValue(p.(*string)) },
 	reflect.TypeOf((*int)(nil)):     func(p any) Value { return newIntValue(p.(*int)) },
+	reflect.TypeOf((*int32)(nil)):   func(p any) Value { return newInt32Value(p.(*int32)) },
 	reflect.TypeOf((*int64)(nil)):   func(p any) Value { return newInt64Value(p.(*int64)) },
 	reflect.TypeOf((*float64)(nil)): func(p any) Value { return newFloat64Value(p.(*float64)) },
 	reflect.TypeOf((*float32)(nil)): func(p any) Value { return newFloat32Value(p.(*float32)) },
@@ -430,7 +433,7 @@ func (f *float32Value) Set(s string) error {
 	return err
 }
 
-func (f *float32Value) Get() any { return float64(*f) }
+func (f *float32Value) Get() any { return float32(*f) }
 
 func (f *float32Value) String() string { return strconv.FormatFloat(float64(*f), 'g', -1, 32) }
 
@@ -451,6 +454,24 @@ func (i *intValue) Set(s string) error {
 func (i *intValue) Get() any { return int(*i) }
 
 func (i *intValue) String() string { return strconv.Itoa(int(*i)) }
+
+// =-=-= int32Value
+type int32Value int32
+
+func newInt32Value(p *int32) *int32Value { return (*int32Value)(p) }
+
+func (i *int32Value) Set(s string) error {
+	v, err := strconv.ParseInt(s, 0, 64)
+	if err != nil {
+		err = ErrParse
+	}
+	*i = int32Value(v)
+	return err
+}
+
+func (i *int32Value) Get() any { return int32(*i) }
+
+func (i *int32Value) String() string { return strconv.FormatInt(int64(*i), 10) }
 
 // =-=-= int64Value
 type int64Value int64
