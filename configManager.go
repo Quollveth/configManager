@@ -24,7 +24,7 @@ var ErrNoParser = errors.New("no parser provided for custom format")
 
 // Used to dynamically store the value of an option
 // Since all options are read from a file the default value is a string
-// String may be called with a zero value receiver
+// Methods may be called with a zero value receiver
 type Value interface {
 	String() string   // Returns this value as a string
 	Set(string) error // Set the option to this value
@@ -174,12 +174,12 @@ func (c *ConfigSet) error(err error) {
 // Defines an option with the specified name and default value.
 // The type is defined by the first argument, which is a Value interface
 // It's methods determine how the value is interacted with
-func (c *ConfigSet) Var(value Value, name string) {
+func (c *ConfigSet) Var(value Value, name string) error {
 	opt := &Option{name, value.String(), value}
 
 	_, exists := c.formal[name]
 	if exists {
-		panic(fmt.Sprintf("%s option redefined", name))
+		return fmt.Errorf("%s option redefined", name)
 	}
 
 	if c.formal == nil {
@@ -187,15 +187,14 @@ func (c *ConfigSet) Var(value Value, name string) {
 	}
 
 	c.formal[name] = opt
+	return nil
 }
 
 // Parse the configuration from the given data and sets all options
 func (c *ConfigSet) ParseFromData(data []byte) {
 	switch c.Format {
-	case JSON:
-		c.Unmarshaller = json.Unmarshal
-	case XML:
-		c.Unmarshaller = xml.Unmarshal
+	case JSON: c.Unmarshaller = json.Unmarshal
+	case XML: c.Unmarshaller = xml.Unmarshal
 	case CUSTOM:
 		if c.Unmarshaller == nil {
 			c.OnError(ErrNoParser)
@@ -286,25 +285,25 @@ func RegisterType[T any](factory func(*T) Value) {
 // Add a new option to the configuration set c
 // key is the name it has on the file and defaultValue is used when the option is not present
 // p is the pointer the value will be set to after parsing the configuration
-func AddOptionToSetVar[T any](c *ConfigSet, p *T, key string, defaultValue T) {
+func AddOptionToSetVar[T any](c *ConfigSet, p *T, key string, defaultValue T) error {
     *p = defaultValue
     t := reflect.TypeOf(p)
 
     factory, ok := valueFactories[t]
-	//TODO: theres probable something better to do instead of panic but im too lazy to do it now
     if !ok {
-        panic(fmt.Sprintf("no ValueFactory registered for type %v", t))
+        return fmt.Errorf("no ValueFactory registered for type %v", t)
     }
-    c.Var(factory(p), key)
+    return c.Var(factory(p), key)
 }
 
 // Add a new option to the configuration set c
 // key is the name it has on the file and defaultValue is used when the option is not present
-func AddOptionToSet[T any](c *ConfigSet, key string, defaultValue T) *T {
+func AddOptionToSet[T any](c *ConfigSet, key string, defaultValue T) (*T, error) {
 	p := new(T)
-	AddOptionToSetVar(c, p, key, defaultValue)
-	return p
+	err := AddOptionToSetVar(c, p, key, defaultValue)
+	return p, err
 }
+
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Global Binds
@@ -320,7 +319,7 @@ func AddOptionVar[T any](p *T, key string, defaultValue T) {
 
 // Add a new configuration option
 // key is the name it has on the file and defaultValue is used when the option is not present
-func AddOption[T any](key string, defaultValue T) *T { return AddOptionToSet(&globalConfig, key, defaultValue) }
+func AddOption[T any](key string, defaultValue T) (*T, error) { return AddOptionToSet(&globalConfig, key, defaultValue) }
 
 // Parse the configuration from the given data and sets all options
 func ParseFromData(data []byte) { globalConfig.ParseFromData(data) }
