@@ -1,0 +1,7 @@
+{
+  "greeting": "hello world",
+  "repeats": 9,
+  "pi": 3.1415,
+  "do the thing": true,
+  "local origin": "0.69,0.420,0.666"
+}

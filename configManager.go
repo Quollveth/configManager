@@ -16,9 +16,6 @@ import (
 // Returned by Set when an option's value fails to parse
 var ErrParse = errors.New("parse error")
 
-// Returned by Set when an option's value is outside the defined range
-var ErrRange = errors.New("value out of range")
-
 // Returned by Parse when format is set to CUSTOM and no unmarshaller is provided
 var ErrNoParser = errors.New("no parser provided for custom format")
 
@@ -217,7 +214,11 @@ func (c *ConfigSet) ParseFromData(data []byte) {
 
 		if v, ok := d[o.Name]; ok {
 			vs := fmt.Sprint(v)
-			o.Value.Set(vs)
+			err := o.Value.Set(vs)
+			if err != nil {
+				c.OnError(err)
+				return
+			}
 
 			if c.actual == nil {
 				c.actual = make(map[string]*Option)
@@ -298,6 +299,9 @@ func AddOptionToSetVar[T any](c *ConfigSet, p *T, key string, defaultValue T) er
 
 // Add a new option to the configuration set c
 // key is the name it has on the file and defaultValue is used when the option is not present
+// type of option is inferred from the default value, only if a custom type is passed an error may be returned in case it lacks a Value wrapper
+// to register an option with a custom type first RegisterType must be called to ensure it has a Value interface wrapper
+// when called with a primitive type (bool, int, int32, int64, float32, float64 or string) this function should never return an error
 func AddOptionToSet[T any](c *ConfigSet, key string, defaultValue T) (*T, error) {
 	p := new(T)
 	err := AddOptionToSetVar(c, p, key, defaultValue)

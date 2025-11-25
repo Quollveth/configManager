@@ -64,6 +64,7 @@ func Test_customTypeOpt(t *testing.T) {
 
 	var c ConfigSet
 	RegisterType(func(t *point) Value { return (*point)(t) })
+
 	rd := point{rand.Float32(), rand.Float32()}
 
 	if e := optionTester(&c, "foo", rd); e != nil {
