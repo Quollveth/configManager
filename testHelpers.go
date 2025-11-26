@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"strings"
 )
 
 func didPanic(f func()) (p bool, info any) {
@@ -40,7 +41,7 @@ func valueTester[T any](v Value, valid []string, invalid []string, base *T, equa
 		if err := v.Set(val); err != nil {
 			return fmt.Errorf("Set(%q) rejected valid value: %v", val, err)
 		}
-		if ret := v.String(); ret != val {
+		if ret := v.String(); strings.ToLower(ret) != strings.ToLower(val) {
 			return fmt.Errorf("String() = %q, want %q", ret, val)
 		}
 

@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"reflect"
 	"slices"
@@ -18,6 +17,9 @@ var ErrParse = errors.New("parse error")
 
 // Returned by Parse when format is set to CUSTOM and no marshaller or unmarshaller is provided
 var ErrNoParser = errors.New("no parser provided for custom format")
+
+// Returned by Parse when value is not within the allowed range
+var ErrRange = errors.New("value outside allowed range")
 
 // Used to dynamically store the value of an option
 // Since all options are read from a file the default value is a string
@@ -72,12 +74,6 @@ const (
 type ConfigSet struct {
 	formal map[string]*Option // All options
 	actual map[string]*Option // Set options
-
-	// Handler for errors
-	// If left as nil errors are written to Output (stderr by default)
-	OnError func(error)
-	// Output of error messages, if nill stderr is used
-	Output io.Writer
 
 	// Location of configuration file
 	Location string
@@ -159,20 +155,6 @@ func (c *ConfigSet) IsZeroValue(name string) (bool, error) {
 	return opt.IsZeroValue()
 }
 
-// Called by Parse when an error happens
-func (c *ConfigSet) error(err error) {
-	if c.OnError != nil {
-		c.OnError(err)
-		return
-	}
-	if c.Output != nil {
-		c.Output.Write([]byte(err.Error()))
-		return
-	}
-
-	os.Stderr.WriteString(err.Error())
-}
-
 // Defines an option with the specified name and default value.
 // The type is defined by the first argument, which is a Value interface
 // It's methods determine how the value is interacted with
@@ -193,16 +175,13 @@ func (c *ConfigSet) Var(value Value, name string) error {
 }
 
 // Parse the configuration from the given data and sets all options
-func (c *ConfigSet) ParseFromData(data []byte) {
+func (c *ConfigSet) ParseFromData(data []byte) error {
 	switch c.Format {
-	case JSON:
-		c.Unmarshaller = json.Unmarshal
-	case XML:
-		c.Unmarshaller = xml.Unmarshal
+	case JSON: c.Unmarshaller = json.Unmarshal
+	case XML: c.Unmarshaller = xml.Unmarshal
 	case CUSTOM:
 		if c.Unmarshaller == nil {
-			c.OnError(ErrNoParser)
-			return
+			return ErrNoParser
 		}
 	}
 
@@ -210,7 +189,7 @@ func (c *ConfigSet) ParseFromData(data []byte) {
 
 	err := c.Unmarshaller(data, &d)
 	if err != nil {
-		c.error(err)
+		return err
 	}
 
 	c.VisitAll(func(o *Option) {
@@ -221,9 +200,10 @@ func (c *ConfigSet) ParseFromData(data []byte) {
 
 		if v, ok := d[o.Name]; ok {
 			vs := fmt.Sprint(v)
-			err := o.Value.Set(vs)
-			if err != nil {
-				c.OnError(err)
+
+			e := o.Value.Set(vs)
+			if e != nil {
+				err = e
 				return
 			}
 
@@ -233,17 +213,18 @@ func (c *ConfigSet) ParseFromData(data []byte) {
 			c.actual[o.Name] = o
 		}
 	})
+
+	return err
 }
 
 // Parse the configuration file and sets all options
-func (c *ConfigSet) Parse() {
+func (c *ConfigSet) Parse() error {
 	fdat, err := os.ReadFile(c.Location)
 	if err != nil {
-		c.OnError(err)
-		return
+		return err
 	}
 
-	c.ParseFromData(fdat)
+	return c.ParseFromData(fdat)
 }
 
 // Save the configuration file with set options to provided location
@@ -384,14 +365,6 @@ func SetFileFormat(format fileFormat) { globalConfig.Format = format }
 func SetFileUnmarshaller(unmarshaller func(data []byte, v any) error) {
 	globalConfig.Unmarshaller = unmarshaller
 }
-
-// Sets output of error messages, by default stderr is used
-// This behavior is only used if SetOnError was not given custom behavior
-func SetErrorOutput(output io.Writer) { globalConfig.Output = output }
-
-// Sets a function to be called when an error happens during parsing
-// By default the behavior is to write error to Output which is stderr by default or set by SetErrorOutput
-func SetOnError(onError func(error)) { globalConfig.OnError = onError }
 
 // Visits all options in lexicographical order, calling fn for each
 // Visits unset options
@@ -544,3 +517,66 @@ func (i *int64Value) Get() any { return int64(*i) }
 
 func (i *int64Value) String() string { return strconv.FormatInt(int64(*i), 10) }
 
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Range Values
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+type stringRangeValue struct {
+	ptr           *string
+	val           string
+	caseSensitive bool
+	allowed       []string
+}
+
+func newStringRangeVal(p *string, caseSensitive bool, allowed ...string) *stringRangeValue {
+	if caseSensitive {
+		return &stringRangeValue{p, *p, caseSensitive, allowed}
+	}
+
+	a := []string{}
+	for _, s := range allowed {
+		a = append(a, strings.ToLower(s))
+	}
+
+	return &stringRangeValue{p, *p, caseSensitive, a}
+}
+
+func (s *stringRangeValue) Set(str string) error {
+	if !s.caseSensitive {
+		str = strings.ToLower(str)
+	}
+
+	if !slices.Contains(s.allowed, str) {
+		return ErrRange
+	}
+
+	s.val = str
+	*s.ptr = str
+	return nil
+}
+
+func (s stringRangeValue) Get() any { return string(s.val) }
+
+func (s stringRangeValue) String() string { return s.val }
+
+// Since these methods are not generic they can have a receiver
+
+// Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
+// Empty string is NOT an accepted value unless specified
+func (c *ConfigSet) StringRangeVar(p *string, key, defaultValue string, caseSensitive bool, allowed ...string) error {
+	v := newStringRangeVal(p, caseSensitive, allowed...)
+	err := v.Set(defaultValue)
+	if err != nil {
+		return err
+	}
+	*p = defaultValue
+	return c.Var(v, key)
+}
+
+// Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
+// Empty string is NOT an accepted value unless specified
+func (c *ConfigSet) StringRange(key, defaultValue string, caseSensitive bool, allowed ...string) (*string, error) {
+	p := new(string)
+	err := c.StringRangeVar(p, key, defaultValue, caseSensitive, allowed...)
+	return p, err
+}
