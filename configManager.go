@@ -563,11 +563,9 @@ func (s stringRangeValue) Get() any { return string(s.val) }
 
 func (s stringRangeValue) String() string { return s.val }
 
-// Since these methods are not generic they can have a receiver
-
 // Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
 // Empty string is NOT an accepted value unless specified
-func (c *ConfigSet) StringRangeVar(p *string, key, defaultValue string, caseSensitive bool, allowed ...string) error {
+func StringRangeVarSet(c *ConfigSet, p *string, key, defaultValue string, caseSensitive bool, allowed ...string) error {
 	v := newStringRangeVal(p, caseSensitive, allowed...)
 	err := v.Set(defaultValue)
 	if err != nil {
@@ -580,21 +578,19 @@ func (c *ConfigSet) StringRangeVar(p *string, key, defaultValue string, caseSens
 // Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
 // Empty string is NOT an accepted value unless specified
 func StringRangeVar(p *string, key, defaultValue string, caseSensitive bool, allowed ...string) error {
-	return globalConfig.StringRangeVar(p, key, defaultValue, caseSensitive, allowed...)
+	return StringRangeVarSet(&globalConfig, p, key, defaultValue, caseSensitive, allowed...)
 }
 
 // Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
 // Empty string is NOT an accepted value unless specified
-func (c *ConfigSet) StringRange(key, defaultValue string, caseSensitive bool, allowed ...string) (*string, error) {
+func StringRangeSet(c *ConfigSet, key, defaultValue string, caseSensitive bool, allowed ...string) (*string, error) {
 	p := new(string)
-	err := c.StringRangeVar(p, key, defaultValue, caseSensitive, allowed...)
+	err := StringRangeVarSet(c, p, key, defaultValue, caseSensitive, allowed...)
 	return p, err
 }
 
 // Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
 // Empty string is NOT an accepted value unless specified
 func StringRange(key, defaultValue string, caseSensitive bool, allowed ...string) (*string, error) {
-	return globalConfig.StringRange(key, defaultValue, caseSensitive, allowed...)
+	return StringRangeSet(&globalConfig, key, defaultValue, caseSensitive, allowed...)
 }
-
-

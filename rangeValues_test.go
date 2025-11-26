@@ -41,20 +41,24 @@ func Test_stringRangeVal(t *testing.T) {
 func Test_stringRangeOption(t *testing.T) {
 	var c ConfigSet
 
-	_, err := c.StringRange("foo", "", false, "bar", "baz")
+	_, err := StringRangeSet(&c, "foo", "", false, "bar", "baz")
 
 	if err == nil {
 		t.Fatal("Option accepted invalid default value")
 	}
 
-	o, err := c.StringRange("direction", "up", false, "up", "down", "left", "right")
+	o, err := StringRangeSet(&c, "direction", "up", false, "up", "down", "left", "right")
 
 	jason := `{"direction":"left"}`
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if e, p := didPanic(func() { err = c.ParseFromData([]byte(jason)) }); e { t.Fatal(p) }
+	if e, p := didPanic(func() { err = c.ParseFromData([]byte(jason)) }); e {
+		t.Fatal(p)
+	}
 
-	if *o != "left" { t.Fatalf("Option set to unexpected value, expected [left] got %v", *o) }
+	if *o != "left" {
+		t.Fatalf("Option set to unexpected value, expected [left] got %v", *o)
+	}
 }
