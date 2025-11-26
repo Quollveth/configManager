@@ -1,6 +1,7 @@
 package configManager
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -62,3 +63,105 @@ func Test_stringRangeOption(t *testing.T) {
 		t.Fatalf("Option set to unexpected value, expected [left] got %v", *o)
 	}
 }
+
+func Test_int32RangeVal(t *testing.T) {
+	var n int32
+
+	v := newInt32RangeValue(&n, -10, 10)
+
+	if err := valueTester(
+		v,
+		[]string{
+			"-10",
+			"10",
+			"0",
+			"5",
+		},
+		[]string{
+			"-15",
+			"15",
+		},
+		&n,
+		func(a string, b int32) bool { return strconv.FormatInt(int64(b), 10) == a },
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_int64RangeVal(t *testing.T) {
+	var n int64
+
+	v := newInt64RangeValue(&n, -10, 10)
+
+	if err := valueTester(
+		v,
+		[]string{
+			"-10",
+			"10",
+			"0",
+			"5",
+		},
+		[]string{
+			"-15",
+			"15",
+		},
+		&n,
+		func(a string, b int64) bool { return strconv.FormatInt(b, 10) == a },
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_float32RangeVal(t *testing.T) {
+	var f float32
+
+	v := newFloat32RangeValue(&f, -10.0, 10.0)
+
+	if err := valueTester(
+		v,
+		[]string{
+			"-10",
+			"10",
+			"0",
+			"5.5",
+		},
+		[]string{
+			"-10.1",
+			"10.1",
+		},
+		&f,
+		func(a string, b float32) bool {
+			return strconv.FormatFloat(float64(b), 'f', -1, 32) == a
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func Test_float64RangeVal(t *testing.T) {
+	var f float64
+
+	v := newFloat64RangeValue(&f, -10.0, 10.0)
+
+	if err := valueTester(
+		v,
+		[]string{
+			"-10",
+			"10",
+			"0",
+			"5.5",
+		},
+		[]string{
+			"-10.1",
+			"10.1",
+		},
+		&f,
+		func(a string, b float64) bool {
+			return strconv.FormatFloat(b, 'f', -1, 64) == a
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+

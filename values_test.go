@@ -78,31 +78,6 @@ func Test_floatVal(t *testing.T) {
 	}
 }
 
-func Test_intVal(t *testing.T) {
-	var f int
-	v := newIntValue(&f)
-
-	if err := valueTester(
-		v,
-		[]string{
-			"69",
-			"-42",
-			fmt.Sprint(math.MaxInt32),
-			fmt.Sprint(math.MinInt32),
-		},
-
-		[]string{
-			"",
-			"6.9",
-			"NaN",
-		},
-		&f,
-		func(a string, b int) bool { return a == strconv.Itoa(b) },
-	); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func Test_int64Val(t *testing.T) {
 	var f int64
 	v := newInt64Value(&f)

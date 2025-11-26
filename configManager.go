@@ -271,7 +271,6 @@ type valueFactory func(p any) Value
 var valueFactories = map[reflect.Type]valueFactory{
 	reflect.TypeOf((*bool)(nil)):    func(p any) Value { return newBoolValue(p.(*bool)) },
 	reflect.TypeOf((*string)(nil)):  func(p any) Value { return newStringValue(p.(*string)) },
-	reflect.TypeOf((*int)(nil)):     func(p any) Value { return newIntValue(p.(*int)) },
 	reflect.TypeOf((*int32)(nil)):   func(p any) Value { return newInt32Value(p.(*int32)) },
 	reflect.TypeOf((*int64)(nil)):   func(p any) Value { return newInt64Value(p.(*int64)) },
 	reflect.TypeOf((*float64)(nil)): func(p any) Value { return newFloat64Value(p.(*float64)) },
@@ -437,7 +436,7 @@ func newFloat64Value(p *float64) *float64Value { return (*float64Value)(p) }
 func (f *float64Value) Set(s string) error {
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		err = ErrParse
+		return ErrParse
 	}
 	*f = float64Value(v)
 	return err
@@ -455,7 +454,7 @@ func newFloat32Value(p *float32) *float32Value { return (*float32Value)(p) }
 func (f *float32Value) Set(s string) error {
 	v, err := strconv.ParseFloat(s, 32)
 	if err != nil {
-		err = ErrParse
+		return ErrParse
 	}
 	*f = float32Value(v)
 	return err
@@ -465,35 +464,18 @@ func (f float32Value) Get() any { return float32(f) }
 
 func (f float32Value) String() string { return strconv.FormatFloat(float64(f), 'g', -1, 32) }
 
-// =-=-= intValue
-type intValue int
-
-func newIntValue(p *int) *intValue { return (*intValue)(p) }
-
-func (i *intValue) Set(s string) error {
-	v, err := strconv.Atoi(s)
-	if err != nil {
-		err = ErrParse
-	}
-	*i = intValue(v)
-	return err
-}
-
-func (i intValue) Get() any { return int(i) }
-
-func (i intValue) String() string { return strconv.Itoa(int(i)) }
-
 // =-=-= int32Value
 type int32Value int32
 
 func newInt32Value(p *int32) *int32Value { return (*int32Value)(p) }
 
 func (i *int32Value) Set(s string) error {
-	v, err := strconv.ParseInt(s, 0, 64)
+	v, err := strconv.ParseInt(s, 0, 32)
+	v32 := int32(v)
 	if err != nil {
-		err = ErrParse
+		return ErrParse
 	}
-	*i = int32Value(v)
+	*i = int32Value(v32)
 	return err
 }
 
@@ -509,7 +491,7 @@ func newInt64Value(p *int64) *int64Value { return (*int64Value)(p) }
 func (i *int64Value) Set(s string) error {
 	v, err := strconv.ParseInt(s, 0, 64)
 	if err != nil {
-		err = ErrParse
+		return ErrParse
 	}
 	*i = int64Value(v)
 	return err
@@ -563,7 +545,7 @@ func (s stringRangeValue) Get() any { return string(s.val) }
 
 func (s stringRangeValue) String() string { return s.val }
 
-// Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
+// Defines a new string option with a specific set of allowed values on the set c, setting option to a value outside allowed set will result in ErrRange
 // Empty string is NOT an accepted value unless specified
 func StringRangeVarSet(c *ConfigSet, p *string, key, defaultValue string, caseSensitive bool, allowed ...string) error {
 	v := newStringRangeVal(p, caseSensitive, allowed...)
@@ -575,13 +557,7 @@ func StringRangeVarSet(c *ConfigSet, p *string, key, defaultValue string, caseSe
 	return c.Var(v, key)
 }
 
-// Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
-// Empty string is NOT an accepted value unless specified
-func StringRangeVar(p *string, key, defaultValue string, caseSensitive bool, allowed ...string) error {
-	return StringRangeVarSet(&globalConfig, p, key, defaultValue, caseSensitive, allowed...)
-}
-
-// Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
+// Defines a new string option with a specific set of allowed values on the set c, setting option to a value outside allowed set will result in ErrRange
 // Empty string is NOT an accepted value unless specified
 func StringRangeSet(c *ConfigSet, key, defaultValue string, caseSensitive bool, allowed ...string) (*string, error) {
 	p := new(string)
@@ -591,6 +567,221 @@ func StringRangeSet(c *ConfigSet, key, defaultValue string, caseSensitive bool, 
 
 // Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
 // Empty string is NOT an accepted value unless specified
+func StringRangeVar(p *string, key, defaultValue string, caseSensitive bool, allowed ...string) error {
+	return StringRangeVarSet(&globalConfig, p, key, defaultValue, caseSensitive, allowed...)
+}
+
+// Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
+// Empty string is NOT an accepted value unless specified
 func StringRange(key, defaultValue string, caseSensitive bool, allowed ...string) (*string, error) {
 	return StringRangeSet(&globalConfig, key, defaultValue, caseSensitive, allowed...)
 }
+
+// =-=-= int32Range
+
+type int32RangeValue struct {
+	ptr           *int32
+	val, min, max int32
+}
+
+func newInt32RangeValue(p *int32, min, max int32) *int32RangeValue {
+	return &int32RangeValue{
+		ptr: p,
+		min: min,
+		max: max,
+	}
+}
+
+func (i *int32RangeValue) Set(s string) error {
+	v, err := strconv.ParseInt(s, 0, 32)
+	if err != nil {
+		return ErrParse
+	}
+	v32 := int32(v)
+
+	if v32 > i.max || v32 < i.min {
+		return ErrRange
+	}
+
+	i.val = v32
+	*i.ptr = v32
+
+	return nil
+}
+
+func (i int32RangeValue) Get() any { return i.val }
+
+func (i int32RangeValue) String() string { return strconv.FormatInt(int64(i.val), 10) }
+
+// Defines a new int32 option with the specified range (inclusive) on the set c, setting option to a value outside allowed range result in ErrRange
+// 0 is not a valid value unless within range
+func Int32RangeVarSet(c *ConfigSet, p *int32, key string, defaultValue, minv, maxv int32) error {
+	v := newInt32RangeValue(p, minv, maxv)
+	err := v.Set(strconv.FormatInt(int64(defaultValue), 10))
+	if err != nil {
+		return err
+	}
+	*p = defaultValue
+	return c.Var(v, key)
+}
+
+// Defines a new int32 option with the specified range (inclusive) on the set c, setting option to a value outside allowed range result in ErrRange
+// 0 is not a valid value unless within range
+func Int32RangeSet(c *ConfigSet ,key string, defaultValue, minv, maxv int32) (*int32, error) {
+	p := new(int32)
+	err := Int32RangeVarSet(c, p, key, defaultValue, minv, maxv)
+	return p, err
+}
+
+// =-=-= int64Range
+
+type int64RangeValue struct {
+	ptr           *int64
+	val, min, max int64
+}
+
+func newInt64RangeValue(p *int64, min, max int64) *int64RangeValue {
+	return &int64RangeValue{
+		ptr: p,
+		min: min,
+		max: max,
+	}
+}
+
+func (i *int64RangeValue) Set(s string) error {
+	v, err := strconv.ParseInt(s, 0, 64)
+	if err != nil {
+		return ErrParse
+	}
+
+	if v > i.max || v < i.min {
+		return ErrRange
+	}
+
+	i.val = v
+	*i.ptr = v
+	return nil
+}
+
+func (i int64RangeValue) Get() any { return i.val }
+
+func (i int64RangeValue) String() string { return strconv.FormatInt(i.val, 10) }
+
+func Int64RangeVarSet(c *ConfigSet, p *int64, key string, defaultValue, minv, maxv int64) error {
+	v := newInt64RangeValue(p, minv, maxv)
+	err := v.Set(strconv.FormatInt(defaultValue, 10))
+	if err != nil {
+		return err
+	}
+	*p = defaultValue
+	return c.Var(v, key)
+}
+
+func Int64RangeSet(c *ConfigSet, key string, defaultValue, minv, maxv int64) (*int64, error) {
+	p := new(int64)
+	err := Int64RangeVarSet(c, p, key, defaultValue, minv, maxv)
+	return p, err
+}
+
+// =-=-= float32Range
+
+type float32RangeValue struct {
+	ptr        *float32
+	val, min, max float32
+}
+
+func newFloat32RangeValue(p *float32, min, max float32) *float32RangeValue {
+	return &float32RangeValue{
+		ptr: p,
+		min: min,
+		max: max,
+	}
+}
+
+func (f *float32RangeValue) Set(s string) error {
+	v, err := strconv.ParseFloat(s, 32)
+	if err != nil {
+		return ErrParse
+	}
+	v32 := float32(v)
+
+	if v32 > f.max || v32 < f.min {
+		return ErrRange
+	}
+
+	f.val = v32
+	*f.ptr = v32
+	return nil
+}
+
+func (f float32RangeValue) Get() any { return f.val }
+
+func (f float32RangeValue) String() string { return strconv.FormatFloat(float64(f.val), 'f', -1, 32) }
+
+func Float32RangeVarSet(c *ConfigSet, p *float32, key string, defaultValue, minv, maxv float32) error {
+	v := newFloat32RangeValue(p, minv, maxv)
+	err := v.Set(strconv.FormatFloat(float64(defaultValue), 'f', -1, 32))
+	if err != nil {
+		return err
+	}
+	*p = defaultValue
+	return c.Var(v, key)
+}
+
+func Float32RangeSet(c *ConfigSet, key string, defaultValue, minv, maxv float32) (*float32, error) {
+	p := new(float32)
+	err := Float32RangeVarSet(c, p, key, defaultValue, minv, maxv)
+	return p, err
+}
+
+// =-=-= float64Range
+
+type float64RangeValue struct {
+	ptr        *float64
+	val, min, max float64
+}
+
+func newFloat64RangeValue(p *float64, min, max float64) *float64RangeValue {
+	return &float64RangeValue{
+		ptr: p,
+		min: min,
+		max: max,
+	}
+}
+
+func (f *float64RangeValue) Set(s string) error {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return ErrParse
+	}
+
+	if v > f.max || v < f.min {
+		return ErrRange
+	}
+
+	f.val = v
+	*f.ptr = v
+	return nil
+}
+
+func (f float64RangeValue) Get() any { return f.val }
+
+func (f float64RangeValue) String() string { return strconv.FormatFloat(f.val, 'f', -1, 64) }
+
+func Float64RangeVarSet(c *ConfigSet, p *float64, key string, defaultValue, minv, maxv float64) error {
+	v := newFloat64RangeValue(p, minv, maxv)
+	err := v.Set(strconv.FormatFloat(defaultValue, 'f', -1, 64))
+	if err != nil {
+		return err
+	}
+	*p = defaultValue
+	return c.Var(v, key)
+}
+
+func Float64RangeSet(c *ConfigSet, key string, defaultValue, minv, maxv float64) (*float64, error) {
+	p := new(float64)
+	err := Float64RangeVarSet(c, p, key, defaultValue, minv, maxv)
+	return p, err
+}
+
+
