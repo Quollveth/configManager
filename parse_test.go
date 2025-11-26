@@ -38,3 +38,17 @@ func Test_parseFile(t *testing.T) {
 		t.Fatal("Option set to zero value")
 	}
 }
+
+func Test_saveTo(t *testing.T){
+	fileLoc := "./test_save.json"
+	var c ConfigSet
+	c.Location = fileLoc
+
+	AddOptionToSet(&c, "greeting", "hello world")
+	AddOptionToSet(&c, "repeats", 9)
+	AddOptionToSet(&c, "do the thing", false)
+
+	c.Set("greeting", "how ya doin")
+
+	c.Save()
+}

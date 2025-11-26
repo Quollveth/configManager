@@ -16,7 +16,7 @@ import (
 // Returned by Set when an option's value fails to parse
 var ErrParse = errors.New("parse error")
 
-// Returned by Parse when format is set to CUSTOM and no unmarshaller is provided
+// Returned by Parse when format is set to CUSTOM and no marshaller or unmarshaller is provided
 var ErrNoParser = errors.New("no parser provided for custom format")
 
 // Used to dynamically store the value of an option
@@ -88,6 +88,11 @@ type ConfigSet struct {
 	// If Format is set to CUSTOM and no unmarshaller is provided a call to Parse will return ErrNoParser
 	// If Format is not set to CUSTOM this can remain unset or nil
 	Unmarshaller func(data []byte, v any) error
+
+	// Marshaller to be used for CUSTOM fileFormat
+	// If Format is set to CUSTOM and no marshaller is provided a call to Save will return ErrNoParser
+	// If Format is not set to CUSTOM this can remain unset or nil
+	Marshaller func(v any) ([]byte, error)
 }
 
 // Returns a lexicographically sorted slice of all options
@@ -190,8 +195,10 @@ func (c *ConfigSet) Var(value Value, name string) error {
 // Parse the configuration from the given data and sets all options
 func (c *ConfigSet) ParseFromData(data []byte) {
 	switch c.Format {
-	case JSON: c.Unmarshaller = json.Unmarshal
-	case XML: c.Unmarshaller = xml.Unmarshal
+	case JSON:
+		c.Unmarshaller = json.Unmarshal
+	case XML:
+		c.Unmarshaller = xml.Unmarshal
 	case CUSTOM:
 		if c.Unmarshaller == nil {
 			c.OnError(ErrNoParser)
@@ -239,7 +246,38 @@ func (c *ConfigSet) Parse() {
 	c.ParseFromData(fdat)
 }
 
-type myType int
+// Save the configuration file with set options to provided location
+// Set may be called to provide values to options, otherwise default values will be used
+func (c *ConfigSet) Save() error {
+	data, err := c.SaveTo()
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(c.Location, data, 777)
+	return err
+}
+
+// Write configuration file with set options and returns data
+// Set may be called to provide values to options, otherwise default values will be used
+func (c *ConfigSet) SaveTo() ([]byte, error) {
+	switch c.Format {
+	case JSON:
+		c.Marshaller = func(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") }
+	case XML:
+		c.Marshaller = func(v any) ([]byte, error) { return xml.MarshalIndent(v, "", "  ") }
+	case CUSTOM:
+		if c.Marshaller == nil {
+			return nil, ErrNoParser
+		}
+	}
+
+	toSave := make(map[string]any)
+	c.VisitAll(func(o *Option) {
+		toSave[o.Name] = o.Value.Get()
+	})
+
+	return c.Marshaller(toSave)
+}
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Generics
@@ -257,7 +295,8 @@ var valueFactories = map[reflect.Type]valueFactory{
 	reflect.TypeOf((*float32)(nil)): func(p any) Value { return newFloat32Value(p.(*float32)) },
 }
 
-/* Register a new type of option in the configuration
+/*
+	Register a new type of option in the configuration
 
 This is a monadic interface and expects a factory function that wraps a type implementing Value interface
 The factory function must receive the type as a pointer and return it wrapped in a Value interface
@@ -287,14 +326,14 @@ func RegisterType[T any](factory func(*T) Value) {
 // key is the name it has on the file and defaultValue is used when the option is not present
 // p is the pointer the value will be set to after parsing the configuration
 func AddOptionToSetVar[T any](c *ConfigSet, p *T, key string, defaultValue T) error {
-    *p = defaultValue
-    t := reflect.TypeOf(p)
+	*p = defaultValue
+	t := reflect.TypeOf(p)
 
-    factory, ok := valueFactories[t]
-    if !ok {
-        return fmt.Errorf("no ValueFactory registered for type %v", t)
-    }
-    return c.Var(factory(p), key)
+	factory, ok := valueFactories[t]
+	if !ok {
+		return fmt.Errorf("no ValueFactory registered for type %v", t)
+	}
+	return c.Var(factory(p), key)
 }
 
 // Add a new option to the configuration set c
@@ -307,7 +346,6 @@ func AddOptionToSet[T any](c *ConfigSet, key string, defaultValue T) (*T, error)
 	err := AddOptionToSetVar(c, p, key, defaultValue)
 	return p, err
 }
-
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Global Binds
@@ -323,7 +361,9 @@ func AddOptionVar[T any](p *T, key string, defaultValue T) {
 
 // Add a new configuration option
 // key is the name it has on the file and defaultValue is used when the option is not present
-func AddOption[T any](key string, defaultValue T) (*T, error) { return AddOptionToSet(&globalConfig, key, defaultValue) }
+func AddOption[T any](key string, defaultValue T) (*T, error) {
+	return AddOptionToSet(&globalConfig, key, defaultValue)
+}
 
 // Parse the configuration from the given data and sets all options
 func ParseFromData(data []byte) { globalConfig.ParseFromData(data) }
@@ -341,7 +381,9 @@ func SetFileFormat(format fileFormat) { globalConfig.Format = format }
 
 // Sets the unmarshaller to be used by a custom file format
 // Function must abide by interface used by json.Unmarshal and xml.Unmarshal
-func SetFileUnmarshaller(unmarshaller func(data []byte, v any) error) { globalConfig.Unmarshaller = unmarshaller }
+func SetFileUnmarshaller(unmarshaller func(data []byte, v any) error) {
+	globalConfig.Unmarshaller = unmarshaller
+}
 
 // Sets output of error messages, by default stderr is used
 // This behavior is only used if SetOnError was not given custom behavior
@@ -367,6 +409,14 @@ func Lookup(name string) *Option { return globalConfig.Lookup(name) }
 
 // Checks wether named option is set to it's zero value
 func IsZeroValue(name string) (bool, error) { return globalConfig.IsZeroValue(name) }
+
+// Save the configuration file with set options to provided location
+// Set may be called to provide values to options, otherwise default values will be used
+func Save() error { return globalConfig.Save() }
+
+// Write configuration file with set options and returns data
+// Set may be called to provide values to options, otherwise default values will be used
+func SaveTo() ([]byte, error) { return globalConfig.SaveTo() }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Basic Values

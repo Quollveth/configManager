@@ -30,7 +30,6 @@ func parseVec(s string) (vec3d, error) {
 
 	return vec3d{floats[0], floats[1], floats[2]}, nil
 }
-
 func randomUnitVec() vec3d {
 	return vec3d{
 		x: rand.Float64(),
@@ -47,7 +46,6 @@ func (v vec3d) String() string {
 func (v vec3d) StringComp() string {
 	return fmt.Sprintf("x:%g,y:%g,z:%g", v.x, v.y, v.z)
 }
-
 func (v *vec3d) Set(val string) error {
 	pv, e := parseVec(val)
 	if e != nil {
@@ -58,7 +56,6 @@ func (v *vec3d) Set(val string) error {
 	v.z = pv.z
 	return nil
 }
-
 func (v vec3d) Get() any {
 	return v
 }
@@ -77,7 +74,7 @@ func Test_usageExample(t *testing.T) {
 
 	config.SetFileLocation(fileloc)
 	config.Parse()
-
+	
 	t.Logf("greeting set to %v", *greeting)
 	t.Logf("repeats set to %v", *repeats)
 	t.Logf("pi set to %v", *pi)
