@@ -411,9 +411,9 @@ func (b *boolValue) Set(s string) error {
 	return err
 }
 
-func (b *boolValue) Get() any { return bool(*b) }
+func (b boolValue) Get() any { return bool(b) }
 
-func (b *boolValue) String() string { return strconv.FormatBool(bool(*b)) }
+func (b boolValue) String() string { return strconv.FormatBool(bool(b)) }
 
 // =-=-= stringValue
 type stringValue string
@@ -425,9 +425,9 @@ func (s *stringValue) Set(str string) error {
 	return nil
 }
 
-func (s *stringValue) Get() any { return string(*s) }
+func (s stringValue) Get() any { return string(s) }
 
-func (s *stringValue) String() string { return string(*s) }
+func (s stringValue) String() string { return string(s) }
 
 // =-=-= float64Value
 type float64Value float64
@@ -443,9 +443,9 @@ func (f *float64Value) Set(s string) error {
 	return err
 }
 
-func (f *float64Value) Get() any { return float64(*f) }
+func (f float64Value) Get() any { return float64(f) }
 
-func (f *float64Value) String() string { return strconv.FormatFloat(float64(*f), 'g', -1, 64) }
+func (f float64Value) String() string { return strconv.FormatFloat(float64(f), 'g', -1, 64) }
 
 // =-=-= float32Value
 type float32Value float32
@@ -461,9 +461,9 @@ func (f *float32Value) Set(s string) error {
 	return err
 }
 
-func (f *float32Value) Get() any { return float32(*f) }
+func (f float32Value) Get() any { return float32(f) }
 
-func (f *float32Value) String() string { return strconv.FormatFloat(float64(*f), 'g', -1, 32) }
+func (f float32Value) String() string { return strconv.FormatFloat(float64(f), 'g', -1, 32) }
 
 // =-=-= intValue
 type intValue int
@@ -479,9 +479,9 @@ func (i *intValue) Set(s string) error {
 	return err
 }
 
-func (i *intValue) Get() any { return int(*i) }
+func (i intValue) Get() any { return int(i) }
 
-func (i *intValue) String() string { return strconv.Itoa(int(*i)) }
+func (i intValue) String() string { return strconv.Itoa(int(i)) }
 
 // =-=-= int32Value
 type int32Value int32
@@ -497,9 +497,9 @@ func (i *int32Value) Set(s string) error {
 	return err
 }
 
-func (i *int32Value) Get() any { return int32(*i) }
+func (i int32Value) Get() any { return int32(i) }
 
-func (i *int32Value) String() string { return strconv.FormatInt(int64(*i), 10) }
+func (i int32Value) String() string { return strconv.FormatInt(int64(i), 10) }
 
 // =-=-= int64Value
 type int64Value int64
@@ -515,9 +515,9 @@ func (i *int64Value) Set(s string) error {
 	return err
 }
 
-func (i *int64Value) Get() any { return int64(*i) }
+func (i int64Value) Get() any { return int64(i) }
 
-func (i *int64Value) String() string { return strconv.FormatInt(int64(*i), 10) }
+func (i int64Value) String() string { return strconv.FormatInt(int64(i), 10) }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Range Values
@@ -597,5 +597,4 @@ func StringRange(key, defaultValue string, caseSensitive bool, allowed ...string
 	return globalConfig.StringRange(key, defaultValue, caseSensitive, allowed...)
 }
 
-// =-=-= intRangeValue
 
