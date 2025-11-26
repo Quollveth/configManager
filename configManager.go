@@ -177,8 +177,10 @@ func (c *ConfigSet) Var(value Value, name string) error {
 // Parse the configuration from the given data and sets all options
 func (c *ConfigSet) ParseFromData(data []byte) error {
 	switch c.Format {
-	case JSON: c.Unmarshaller = json.Unmarshal
-	case XML: c.Unmarshaller = xml.Unmarshal
+	case JSON:
+		c.Unmarshaller = json.Unmarshal
+	case XML:
+		c.Unmarshaller = xml.Unmarshal
 	case CUSTOM:
 		if c.Unmarshaller == nil {
 			return ErrNoParser
@@ -521,6 +523,8 @@ func (i *int64Value) String() string { return strconv.FormatInt(int64(*i), 10) }
 // Range Values
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
+// =-=-= stringRangeValue
+
 type stringRangeValue struct {
 	ptr           *string
 	val           string
@@ -575,8 +579,23 @@ func (c *ConfigSet) StringRangeVar(p *string, key, defaultValue string, caseSens
 
 // Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
 // Empty string is NOT an accepted value unless specified
+func StringRangeVar(p *string, key, defaultValue string, caseSensitive bool, allowed ...string) error {
+	return globalConfig.StringRangeVar(p, key, defaultValue, caseSensitive, allowed...)
+}
+
+// Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
+// Empty string is NOT an accepted value unless specified
 func (c *ConfigSet) StringRange(key, defaultValue string, caseSensitive bool, allowed ...string) (*string, error) {
 	p := new(string)
 	err := c.StringRangeVar(p, key, defaultValue, caseSensitive, allowed...)
 	return p, err
 }
+
+// Defines a new string option with a specific set of allowed values, setting option to a value outside allowed set will result in ErrRange
+// Empty string is NOT an accepted value unless specified
+func StringRange(key, defaultValue string, caseSensitive bool, allowed ...string) (*string, error) {
+	return globalConfig.StringRange(key, defaultValue, caseSensitive, allowed...)
+}
+
+// =-=-= intRangeValue
+
