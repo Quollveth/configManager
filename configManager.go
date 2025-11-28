@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"reflect"
 	"slices"
 	"strconv"
@@ -177,10 +178,8 @@ func (c *ConfigSet) Var(value Value, name string) error {
 // Parse the configuration from the given data and sets all options
 func (c *ConfigSet) ParseFromData(data []byte) error {
 	switch c.Format {
-	case JSON:
-		c.Unmarshaller = json.Unmarshal
-	case XML:
-		c.Unmarshaller = xml.Unmarshal
+	case JSON: c.Unmarshaller = json.Unmarshal
+	case XML: c.Unmarshaller = xml.Unmarshal
 	case CUSTOM:
 		if c.Unmarshaller == nil {
 			return ErrNoParser
@@ -221,6 +220,10 @@ func (c *ConfigSet) ParseFromData(data []byte) error {
 
 // Parse the configuration file and sets all options
 func (c *ConfigSet) Parse() error {
+	if c.Location == "" {
+		return fmt.Errorf("No file location provided")
+	}
+
 	fdat, err := os.ReadFile(c.Location)
 	if err != nil {
 		return err
@@ -232,11 +235,21 @@ func (c *ConfigSet) Parse() error {
 // Save the configuration file with set options to provided location
 // Set may be called to provide values to options, otherwise default values will be used
 func (c *ConfigSet) Save() error {
+	if c.Location == "" {
+		return fmt.Errorf("No file location provided")
+	}
+
+	err := os.MkdirAll(path.Dir(c.Location), 0755)
+	if err != nil {
+		return fmt.Errorf("Could not save configuration: %v", err)
+	}
+
 	data, err := c.SaveTo()
 	if err != nil {
-		return err
+		return fmt.Errorf("Could not save configuration: %v", err)
 	}
-	err = os.WriteFile(c.Location, data, 777)
+
+	err = os.WriteFile(c.Location, data, 0644)
 	return err
 }
 
@@ -244,10 +257,8 @@ func (c *ConfigSet) Save() error {
 // Set may be called to provide values to options, otherwise default values will be used
 func (c *ConfigSet) SaveTo() ([]byte, error) {
 	switch c.Format {
-	case JSON:
-		c.Marshaller = func(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") }
-	case XML:
-		c.Marshaller = func(v any) ([]byte, error) { return xml.MarshalIndent(v, "", "  ") }
+	case JSON: c.Marshaller = func(v any) ([]byte, error) { return json.MarshalIndent(v, "", "  ") }
+	case XML: c.Marshaller = func(v any) ([]byte, error) { return xml.MarshalIndent(v, "", "  ") }
 	case CUSTOM:
 		if c.Marshaller == nil {
 			return nil, ErrNoParser
